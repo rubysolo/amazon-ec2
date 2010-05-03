@@ -43,21 +43,54 @@ module AWS
       end
 
 
-      # The RegisterImage operation registers an AMI with Amazon EC2. Images must be registered before
-      # they can be launched.  Each AMI is associated with an unique ID which is provided by the EC2
-      # service via the Registerimage operation. As part of the registration process, Amazon EC2 will
-      # retrieve the specified image manifest from Amazon S3 and verify that the image is owned by the
-      # user requesting image registration.  The image manifest is retrieved once and stored within the
-      # Amazon EC2 network. Any modifications to an image in Amazon S3 invalidate this registration.
-      # If you do have to make changes and upload a new image deregister the previous image and register
-      # the new image.
+      # Registers an AMI with Amazon EC2. Images must be registered before they can be launched.
+      # To launch instances, use the RunInstances operation.  Each AMI is associated with an unique ID
+      # which is provided by the Amazon EC2 service through this operation. If needed, you can deregister
+      # an AMI at any time.
       #
-      # @option options [String] :image_location ("")
+      # AMIs backed by Amazon EBS are automatically registered when you create the image.
+      # However, you can use this to register a snapshot of an instance backed by Amazon EBS.
+      #
+      # Amazon EBS snapshots are not guaranteed to be bootable. For information on creating AMIs
+      # backed by Amazon EBS, go to the Amazon Elastic Compute Cloud Developer Guide or Amazon
+      # Elastic Compute Cloud User Guide.
+      #
+      # Any modifications to an AMI backed by Amazon S3 invalidates this registration.
+      # If you make changes to an image, deregister the previous image and register the new image.
+      #
+      # If an :image_location is specified then an old-style S3-backed AMI is created. If the other
+      # parameters are used then a new style EBS-backed AMI is created from a pre-existing snapshot.
+      #
+      # @option options [optional, String] :image_location ("") S3 URL for the XML manifest
+      # @option options [optional, String] :name ("") Name of EBS image
+      # @option options [optional, String] :description ("") Description of EBS image
+      # @option options [optional, String] :architecture ("") Architecture of EBS image, currently 'i386' or 'x86_64'
+      # @option options [optional, String] :kernel_id ("") Kernel ID of EBS image
+      # @option options [optional, String] :ramdisk_id ("") Ramdisk ID of EBS image
+      # @option options [optional, String] :root_device_name ("") Root device name of EBS image, eg '/dev/sda1'
+      # @option options [optional, Array] :block_device_mapping ([]) An array of Hashes representing the elements of the block device mapping.  e.g. [{:device_name => '/dev/sdh', :virtual_name => '', :ebs_snapshot_id => '', :ebs_volume_size => '', :ebs_delete_on_termination => ''},{},...]
       #
       def register_image( options = {} )
-        options = {:image_location => ""}.merge(options)
-        raise ArgumentError, "No :image_location provided" if options[:image_location].nil? || options[:image_location].empty?
-        params = { "ImageLocation" => options[:image_location] }
+        params = {}
+        if options.does_not_have?(:image_location) && options.does_not_have?(:root_device_name)
+          raise ArgumentError, "No :image_location or :root_device_name"
+        end
+        params["ImageLocation"] = options[:image_location].to_s unless options[:image_location].nil?
+        params["Name"] = options[:name].to_s unless options[:name].nil?
+        params["Description"] = options[:description].to_s unless options[:description].nil?
+        params["Architecture"] = options[:architecture].to_s unless options[:architecture].nil?
+        params["KernelId"] = options[:kernel_id].to_s unless options[:kernel_id].nil?
+        params["RamdiskId"] = options[:ramdisk_id].to_s unless options[:ramdisk_id].nil?
+        params["RootDeviceName"] = options[:root_device_name].to_s unless options[:root_device_name].nil?
+        if options[:block_device_mapping]
+          params.merge!(pathhashlist("BlockDeviceMapping", options[:block_device_mapping].flatten, {
+            :device_name => "DeviceName",
+            :virtual_name => "VirtualName",
+            :ebs_snapshot_id => "Ebs.SnapshotId",
+            :ebs_volume_size => "Ebs.VolumeSize",
+            :ebs_delete_on_termination => "Ebs.DeleteOnTermination"
+          }))
+        end
         return response_generator(:action => "RegisterImage", :params => params)
       end
 

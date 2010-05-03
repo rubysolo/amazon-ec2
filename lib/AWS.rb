@@ -8,7 +8,7 @@
 # Home::      http://github.com/grempe/amazon-ec2/tree/master
 #++
 
-%w[ base64 cgi openssl digest/sha1 net/https rexml/document time ostruct ].each { |f| require f }
+%w[ base64 cgi openssl digest/sha1 net/https net/http rexml/document time ostruct ].each { |f| require f }
 
 begin
   require 'xmlsimple' unless defined? XmlSimple
@@ -27,6 +27,10 @@ class Hash
     if args.size == 0
       self[meth.to_s] || self[meth.to_sym]
     end
+  end
+
+  def type
+    self['type']
   end
 
   def has?(key)
@@ -57,7 +61,10 @@ module AWS
       encoded = (CGI::escape(p[0].to_s) +
                  "=" + CGI::escape(p[1].to_s))
       # Ensure spaces are encoded as '%20', not '+'
-      encoded.gsub('+', '%20')
+      encoded = encoded.gsub('+', '%20')
+      # According to RFC3986 (the scheme for values expected by signing requests), '~' 
+      # should not be encoded
+      encoded = encoded.gsub('%7E', '~')
     end
     sigquery = encoded_params.join("&")
 
@@ -153,6 +160,20 @@ module AWS
       # Don't verify the SSL certificates.  Avoids SSL Cert warning in log on every GET.
       @http.verify_mode = OpenSSL::SSL::VERIFY_NONE
 
+    end
+
+    # If :user_data is passed in then URL escape and Base64 encode it
+    # as needed.  Need for URL Escape + Base64 encoding is determined
+    # by :base64_encoded param.
+    def extract_user_data( options = {} )
+      return unless options[:user_data]
+      if options[:user_data]
+        if options[:base64_encoded]
+          Base64.encode64(options[:user_data]).gsub(/\n/, "").strip()
+        else
+          options[:user_data]
+        end
+      end
     end
 
 
@@ -256,7 +277,6 @@ module AWS
         http_response = make_request(options[:action], options[:params])
         http_xml = http_response.body
         return Response.parse(:xml => http_xml)
-
       end
 
       # Raises the appropriate error if the specified Net::HTTPResponse object

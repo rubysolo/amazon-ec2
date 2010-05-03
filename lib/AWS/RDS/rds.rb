@@ -17,7 +17,7 @@ module AWS
       # @option options [String] :db_security_groups are the list of db security groups to associate with the instance (nil)
       # @option options [String] :availability_zone is the availability_zone to create the instance in (nil)
       # @option options [String] :preferred_maintenance_window in format: ddd:hh24:mi-ddd:hh24:mi (nil)
-      # @option options [String] :backend_retention_period is the number of days which automated backups are retained (1)
+      # @option options [String] :backup_retention_period is the number of days which automated backups are retained (1)
       # @option options [String] :preferred_backup_window is the daily time range for which automated backups are created
       #
       def create_db_instance( options = {})
@@ -28,6 +28,9 @@ module AWS
         raise ArgumentError, "No :master_username provided" if options.does_not_have?(:master_username)
         raise ArgumentError, "No :master_user_password provided" if options.does_not_have?(:master_user_password)
         raise ArgumentError, "No :db_instance_class provided" if options.does_not_have?(:db_instance_class)
+
+        # handle a former argument that was misspelled
+        raise ArgumentError, "Perhaps you meant :backup_retention_period" if options.has?(:backend_retention_period)
 
         params = {}
         params['DBInstanceIdentifier'] = options[:db_instance_identifier]
@@ -42,8 +45,8 @@ module AWS
         params["DBParameterGroup"] = options[:db_parameter_group] if options.has?(:db_parameter_group)
         params["DBSecurityGroups"] = options[:db_security_groups] if options.has?(:db_security_groups)
         params["AvailabilityZone"] = options[:availability_zone] if options.has?(:availability_zone)
-        params["PreferredMaintenanceWindow"] = options[:preferred_backup_window] if options.has?(:preferred_backup_window)
-        params["BackupRetentionPeriod"] = options[:backend_retention_period] if options.has?(:backend_retention_period)
+        params["PreferredMaintenanceWindow"] = options[:preferred_maintenance_window] if options.has?(:preferred_maintenance_window)
+        params["BackupRetentionPeriod"] = options[:backup_retention_period].to_s if options.has?(:backup_retention_period)
         params["PreferredBackupWindow"] = options[:preferred_backup_window] if options.has?(:preferred_backup_window)
 
         return response_generator(:action => "CreateDBInstance", :params => params)
@@ -344,11 +347,14 @@ module AWS
       # @option options [String] :db_security_groups are the list of db security groups to associate with the instance (nil)
       # @option options [String] :availability_zone is the availability_zone to create the instance in (nil)
       # @option options [String] :preferred_maintenance_window in format: ddd:hh24:mi-ddd:hh24:mi (nil)
-      # @option options [String] :backend_retention_period is the number of days which automated backups are retained (1)
+      # @option options [String] :backup_retention_period is the number of days which automated backups are retained (1)
       # @option options [String] :preferred_backup_window is the daily time range for which automated backups are created
       #
       def modify_db_instance( options = {})
         raise ArgumentError, "No :db_instance_identifier provided" if options.does_not_have?(:db_instance_identifier)
+
+        # handle a former argument that was misspelled
+        raise ArgumentError, "Perhaps you meant :backup_retention_period" if options.has?(:backend_retention_period)
 
         params = {}
         params['DBInstanceIdentifier'] = options[:db_instance_identifier]
@@ -363,8 +369,8 @@ module AWS
         params["DBParameterGroupName"] = options[:db_parameter_group_name] if options.has?(:db_parameter_group_name)
         params["DBSecurityGroups"] = options[:db_security_groups] if options.has?(:db_security_groups)
         params["AvailabilityZone"] = options[:availability_zone] if options.has?(:availability_zone)
-        params["PreferredMaintenanceWindow"] = options[:preferred_backup_window] if options.has?(:preferred_backup_window)
-        params["BackupRetentionPeriod"] = options[:backend_retention_period] if options.has?(:backend_retention_period)
+        params["PreferredMaintenanceWindow"] = options[:preferred_maintenance_window] if options.has?(:preferred_maintenance_window)
+        params["BackupRetentionPeriod"] = options[:backup_retention_period].to_s if options.has?(:backup_retention_period)
         params["PreferredBackupWindow"] = options[:preferred_backup_window] if options.has?(:preferred_backup_window)
 
         return response_generator(:action => "ModifyDBInstance", :params => params)
@@ -462,25 +468,35 @@ module AWS
       # DB Snapshot was created.
       #
       # @option options [String] :source_db_instance_identifier the identifier of the source DB Instance from which to restore.
+      # @option options [optional, Boolean] :use_latest_restorable_time specifies that the db be restored to the latest restored time. Conditional, cannot be specified if :restore_time parameter is provided.
+      # @option options [optional, Date] :restore_time specifies the date and time to restore from. Conditional, cannot be specified if :use_latest_restorable_time parameter is true.
       # @option options [String] :target_db_instance_identifier is the name of the new database instance to be created.
-      # @option options [String] :use_latest_restorable_time specifies that the db be restored to the latest restored time
-      # @option options [String] :restore_time specifies the date and time to restore from
-      # @option options [String] :db_instance_class specifies the class of the compute and memory of the EC2 instance
-      # @option options [String] :port is the port which the db can accept connections on
-      # @option options [String] :availability_zone is the EC2 zone which the db instance will be created
+      # @option options [optional, String] :db_instance_class specifies the class of the compute and memory of the EC2 instance, Options : db.m1.small | db.m1.large | db.m1.xlarge | db.m2.2xlarge | db.m2.4xlarge
+      # @option options [optional, Integer] :port is the port which the db can accept connections on. Constraints: Value must be 1115-65535
+      # @option options [optional, String] :availability_zone is the EC2 zone which the db instance will be created
       #
       def restore_db_instance_to_point_in_time( options = {} )
-        raise ArgumentError, "No :db_snapshot_identifier provided" if options.does_not_have?(:db_snapshot_identifier)
-        raise ArgumentError, "No :db_instance_identifier provided" if options.does_not_have?(:db_instance_identifier)
-        raise ArgumentError, "No :db_instance_class provided" if options.does_not_have?(:db_instance_class)
+        raise ArgumentError, "No :source_db_instance_identifier provided" if options.does_not_have?(:source_db_instance_identifier)
+        raise ArgumentError, "No :target_db_instance_identifier provided" if options.does_not_have?(:target_db_instance_identifier)
 
         params = {}
         params['SourceDBInstanceIdentifier'] = options[:source_db_instance_identifier]
         params['TargetDBInstanceIdentifier'] = options[:target_db_instance_identifier]
 
-        if options[:use_latest_restorable_time]
-          params['UseLatestRestorableTime'] = options[:use_latest_restorable_time]
-        elsif options[:restore_time]
+        if options.has?(:use_latest_restorable_time) && options.has?(:restore_time)
+          raise ArgumentError, "You cannot provide both :use_latest_restorable_time and :restore_time"
+        elsif options.has?(:use_latest_restorable_time)
+          params['UseLatestRestorableTime'] = case options[:use_latest_restorable_time]
+                                              when 'true', 'false'
+                                                options[:use_latest_restorable_time]
+                                              when true
+                                                'true'
+                                              when false
+                                                'false'
+                                              else
+                                                raise ArgumentError, "Invalid value provided for :use_latest_restorable_time.  Expected boolean."
+                                              end
+        elsif options.has?(:restore_time)
           params['RestoreTime'] = options[:restore_time]
         end
 

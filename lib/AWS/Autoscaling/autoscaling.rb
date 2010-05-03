@@ -59,7 +59,7 @@ module AWS
         params['MinSize'] = options[:min_size].to_s
         params['MaxSize'] = options[:max_size].to_s
         params.merge!(pathlist("LoadBalancerNames.member", [options[:load_balancer_names]].flatten)) if options.has_key?(:load_balancer_names)
-        params['CoolDown'] = options[:cooldown] if options[:cooldown]
+        params['Cooldown'] = options[:cooldown] if options[:cooldown]
 
         return response_generator(:action => "CreateAutoScalingGroup", :params => params)
       end
@@ -73,6 +73,7 @@ module AWS
       #   When called as a hash, the values must look like: {:name => "name", :value => "value"}
       #   In the array format, the first value is assumed to be the name and the second is assumed to be the value
       # @option options [String] :measure_name (nil) the measure name associated with the metric used by the trigger
+      # @option options [optional,String] :namespace (nil) namespace of the metric on which to trigger. Used to describe the monitoring metric.
       # @option options [String|Integer] :period (nil) the period associated with the metric in seconds
       # @option options [String] :statistic (nil) The particular statistic used by the trigger when fetching metric statistics to examine. Must be one of the following: Minimum, Maximum, Sum, Average
       # @option options [String] :trigger_name (nil) the name for this trigger
@@ -102,7 +103,7 @@ module AWS
         end
 
         params = {}
-        params['Unit'] = options[:unit] || "Seconds"
+        params['Unit'] = options[:unit] if options[:unit]
         params['AutoScalingGroupName'] = options[:autoscaling_group_name]
         case options[:dimensions]
         when Array
@@ -112,9 +113,10 @@ module AWS
           params["Dimensions.member.1.Name"] = options[:dimensions][:name]
           params["Dimensions.member.1.Value"] = options[:dimensions][:value]
         else
-          raise ArgumentError, "Dimensionss must be either an array or a hash"
+          raise ArgumentError, "Dimensions must be either an array or a hash"
         end
         params['MeasureName'] = options[:measure_name]
+        params['Namespace'] = options[:namespace] if options[:namespace]
         params['Statistic'] = options[:statistic]
         params['Period'] = options[:period].to_s
         params['TriggerName'] = options[:trigger_name]
@@ -261,7 +263,7 @@ module AWS
         params['AutoScalingGroupName'] = options[:autoscaling_group_name]
         params['MinSize'] = options[:min_size] if options.has_key?(:min_size)
         params['MaxSize'] = options[:max_size] if options.has_key?(:max_size)
-        params['CoolDown'] = options[:cooldown]  if options.has_key?(:cooldown)
+        params['Cooldown'] = options[:cooldown]  if options.has_key?(:cooldown)
 
         return response_generator(:action => "UpdateAutoScalingGroup", :params => params)
 

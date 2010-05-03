@@ -10,7 +10,7 @@ module AWS
       # @option options [Integer] :min_count (1) Minimum number of instances to launch. If the value is more than Amazon EC2 can launch, no instances are launched at all.
       # @option options [Integer] :max_count (1) Maximum number of instances to launch. If the value is more than Amazon EC2 can launch, the largest possible number above minCount will be launched instead.
       # @option options [optional, String] :key_name (nil) The name of the key pair.
-      # @option options [optional, Array of Strings or String] :security_group (nil) Name of the security group(s).
+      # @option options [optional, Array] :security_group (nil) Name of the security group(s). Array of Strings or String.
       # @option options [optional, String] :additional_info (nil) Specifies additional information to make available to the instance(s).
       # @option options [optional, String] :user_data (nil) MIME, Base64-encoded user data.
       # @option options [optional, String] :instance_type (nil) Specifies the instance type.
@@ -36,7 +36,7 @@ module AWS
         raise ArgumentError, ":image_id must be provided" if options[:image_id].nil? || options[:image_id].empty?
         raise ArgumentError, ":min_count is not valid" unless options[:min_count].to_i > 0
         raise ArgumentError, ":max_count is not valid or must be >= :min_count" unless options[:max_count].to_i > 0 && options[:max_count].to_i >= options[:min_count].to_i
-        raise ArgumentError, ":instance_type must specify a valid instance size" unless options[:instance_type].nil? || ["m1.small", "m1.large", "m1.xlarge", "c1.medium", "c1.xlarge", "m2.2xlarge", "m2.4xlarge"].include?(options[:instance_type])
+        raise ArgumentError, ":instance_type must specify a valid instance type" unless options[:instance_type].nil? || ["m1.small", "m1.large", "m1.xlarge", "m2.xlarge", "c1.medium", "c1.xlarge", "m2.2xlarge", "m2.4xlarge"].include?(options[:instance_type])
         raise ArgumentError, ":monitoring_enabled must be 'true' or 'false'" unless options[:monitoring_enabled].nil? || [true, false].include?(options[:monitoring_enabled])
         raise ArgumentError, ":disable_api_termination must be 'true' or 'false'" unless options[:disable_api_termination].nil? || [true, false].include?(options[:disable_api_termination])
         raise ArgumentError, ":instance_initiated_shutdown_behavior must be 'stop' or 'terminate'" unless options[:instance_initiated_shutdown_behavior].nil? || ["stop", "terminate"].include?(options[:instance_initiated_shutdown_behavior])
@@ -71,21 +71,6 @@ module AWS
 
         return response_generator(:action => "RunInstances", :params => params)
       end
-
-      # If :user_data is passed in then URL escape and Base64 encode it
-      # as needed.  Need for URL Escape + Base64 encoding is determined
-      # by :base64_encoded param.
-      def extract_user_data( options = {} )
-        return unless options[:user_data]
-        if options[:user_data]
-          if options[:base64_encoded]
-            Base64.encode64(options[:user_data]).gsub(/\n/,"").strip()
-          else
-            options[:user_data]
-          end
-        end
-      end
-
 
       # The DescribeInstances operation returns information about instances owned by the user
       # making the request.
@@ -243,7 +228,43 @@ module AWS
       end
 
 
+
     end
+
+    #
+    # A set of methods for querying amazon's ec2 meta-data service.
+    # Note : This can ONLY be run on an actual running EC2 instance.
+    #
+    # Example Class Method Usage :
+    # instance_id = AWS::EC2::Instance.local_instance_id
+    #
+    module Instance
+
+      EC2_META_URL_BASE = 'http://169.254.169.254/latest/meta-data/'
+
+      #
+      # Returns the current instance-id when called from a host within EC2.
+      #
+      def self.local_instance_id
+        Net::HTTP.get URI.parse(EC2_META_URL_BASE + 'instance-id')
+      end
+
+      #
+      # Returns a hash of all available instance meta data.
+      #
+      def self.local_instance_meta_data
+        meta_data = {}
+
+        Net::HTTP.get(URI.parse(EC2_META_URL_BASE)).split("\n").each do |meta_type|
+          meta_data.merge!({meta_type => Net::HTTP.get(URI.parse(EC2_META_URL_BASE + meta_type)) })
+        end
+
+        return meta_data
+      end
+
+    end
+
+
   end
 end
 
